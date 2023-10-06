@@ -1,0 +1,141 @@
+plugins {
+    id 'com.bmuschko.docker-remote-api' version '7.1.0'
+}
+
+import com.bmuschko.gradle.docker.tasks.container.*
+import com.bmuschko.gradle.docker.tasks.image.*
+
+description = 'A generic_web_server application'
+group = 'com.tvd.generic_web_server'
+version = theVersion
+
+// Verify the user has a Gradle version capable of the build.
+assert gradle.gradleVersion >= '6.1', 'This Build only works with Gradle Version 4.4 or above'
+
+apply plugin: 'scala'
+apply plugin: 'application'
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+mainClassName = "com.tvd.generic_web_server.WebServer"
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    scalaVersion         = '2.13.6'
+    akkaVersion          = '2.6.16'
+    akkaHttpVersion      = '10.2.6'
+    logbackVersion       = '1.2.3'
+    sslAkkaVersion       = '0.2.2'
+    configVersion        = '1.4.1'
+    slickVersion         = '3.3.3'
+
+    junitVersion         = '4.12'
+    scalatestVersion     = '3.3.0-SNAP3'
+    scalamockVersion     = '5.1.0'
+    scalatestplusVersion = '3.2.9.0'
+}
+
+configurations {
+    compile
+}
+
+dependencies {
+    implementation group: 'org.scala-lang',         name: 'scala-library',                   version: scalaVersion
+    implementation group: 'com.typesafe.akka',      name: 'akka-actor_2.13',                 version: akkaVersion
+    implementation group: 'com.typesafe.akka',      name: 'akka-stream_2.13',                version: akkaVersion
+    implementation group: 'com.typesafe.akka',      name: 'akka-http_2.13',                  version: akkaHttpVersion
+    implementation group: 'com.typesafe.akka',      name: 'akka-serialization-jackson_2.13', version: akkaVersion
+
+//    implementation group: 'com.typesafe',           name: 'ssl-config-akka_2.12',            version: sslAkkaVersion
+    implementation group: 'com.typesafe',           name: 'config',                          version: configVersion
+    implementation group: 'com.typesafe.akka',      name: 'akka-slf4j_2.13',                 version: akkaVersion
+    implementation group: 'ch.qos.logback',         name: 'logback-classic',                 version: logbackVersion
+
+    implementation group: 'com.typesafe.slick',     name: 'slick_2.13' ,                     version: slickVersion
+    implementation group: 'org.seleniumhq.selenium',name: 'selenium-java',                   version: '4.0.0-rc-1'
+    implementation group: 'commons-io',             name: 'commons-io',                      version: '2.11.0'
+
+    testImplementation group: 'org.scalamock',      name: 'scalamock_2.13',                  version: scalamockVersion
+    testImplementation group: 'org.scalatestplus',  name: 'junit-4-13_2.13',                 version: scalatestplusVersion
+    testImplementation group: 'org.scalatest',      name: 'scalatest_2.13',                  version: scalatestVersion
+    testImplementation group: 'com.typesafe.akka',  name: 'akka-testkit_2.13',               version: akkaVersion
+    testImplementation group: 'com.typesafe.akka',  name: 'akka-stream-testkit_2.13',        version: akkaVersion
+    testImplementation group: 'com.typesafe.akka',  name: 'akka-http-testkit_2.13',          version: akkaHttpVersion
+}
+
+task buildImage(type: DockerBuildImage) {
+    dependsOn build
+    inputDir.set(file('Dockerfile').parentFile)
+    images.add("gereneric_web_server:${theVersion}")
+}
+
+task createContainer(type: DockerCreateContainer) {
+    dependsOn buildImage
+    targetImageId buildImage.getImageId()
+
+    hostConfig.portBindings.set(['8383:8383'])
+    hostConfig.autoRemove.set(false)
+    exposedPorts.add(new DockerCreateContainer.ExposedPort("tcp",[8383]))
+    containerName.set('gws')
+    tty.set(true)
+    entrypoint.set(['/bin/sh'])
+}
+
+task startContainer(type: DockerStartContainer) {
+    dependsOn createContainer
+    targetContainerId createContainer.getContainerId()
+}
+
+task logContainer(type: DockerLogsContainer) {
+    dependsOn startContainer
+    targetContainerId startContainer.getContainerId()
+
+    follow.set(true)
+    tailAll.set(true)
+    onNext { message ->
+        logger.quiet message.toString()
+    }
+}
+
+task stopMyAppContainer(type: DockerStopContainer) {
+    dependsOn startContainer
+    targetContainerId startContainer.getContainerId()
+}
+
+task removeContainer(type: DockerRemoveContainer) {
+    dependsOn stopMyAppContainer
+    targetContainerId startContainer.getContainerId()
+
+    onError { exception ->
+        // Ignore exception if container does not exist otherwise throw it
+        if (!exception.message.contains('No such container'))
+            throw exception
+    }
+    onComplete {
+        println 'Executes first'
+    }
+    doLast {
+        println 'Executes second'
+    }
+}
+
+task runTests(type: DockerExecContainer) {
+    dependsOn startContainer
+    finalizedBy removeContainer
+    targetContainerId startContainer.getContainerId()
+
+    withCommand(['/bin/bash', '-c', 'curl -v http://localhost:8383/generic_web_server/ping'])
+    withCommand(['echo', 'Hello World Two'])
+    withCommand(['echo', 'Hello World Three'])
+
+    doFirst {
+        sleep(10 * 1000)
+    }
+    doLast {
+        logger.quiet "FOUND EXEC-IDS: " + execIds.get().size()
+    }
+}

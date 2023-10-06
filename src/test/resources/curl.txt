@@ -1,0 +1,26 @@
+Generate self-signed PKCS#12 SSL certificate
+--------------------------------------------
+TVD_SSL_PASSWORD=generic_web_service
+keytool -genkeypair -keystore keystore.p12 -storetype PKCS12 -storepass $TVD_SSL_PASSWORD -keyalg RSA -keysize 2048 -validity 99999 -dname "CN=generic_web_server_certificate, OU=tvd, O=anindu, L=Pittsburgh, ST=PA, C=SA"
+
+Start the server
+----------------
+TVD_KEYSTORE=src/main/resources/keystore.p12
+TVD_SSL_PASSWORD=generic_web_service
+./gradlew run
+
+CURL commands
+-------------
+curl -k https://localhost:8383/generic_web_server/ping
+
+curl -k https://localhost:8383/generic_web_server/healthcheck/db
+curl -k https://localhost:8383/generic_web_server/healthcheck/mem
+
+curl -k https://localhost:8383/generic_web_server/log\?path=com.tvd.generic_web_server.WebServer
+curl -k -X POST https://localhost:8383/generic_web_server/log\?level=DEBUG\&path=com.tvd.generic_web_server.WebServer
+
+curl -k https://localhost:8383/generic_web_server/user
+curl -k -X POST -d "{\"name\":\"Gigi\",\"age\":32,\"countryOfResidence\":\"Comkistan\"}" https://localhost:8383/generic_web_server/user
+
+ERRORS
+========

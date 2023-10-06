@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  generic-web-server:
+    container_name: gws
+    hostname: gws
+    user: gws
+    stdin_open: true
+    tty: true
+    build:
+      context: ..
+      args:
+        TVD_SSL_PASSWORD: changeme
+    ports:
+      - "8383:8383"

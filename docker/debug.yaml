@@ -1,0 +1,6 @@
+services:
+  generic-web-server:
+    environment:
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+    ports:
+      - "${SOURCE_PORT}:5005"
